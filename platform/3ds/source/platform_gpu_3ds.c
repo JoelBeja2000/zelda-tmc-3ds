@@ -232,52 +232,82 @@ static void ResetStandardTextureEnv(void) {
     C3D_TexEnvInit(env);
 }
 
+typedef struct {
+    float ppi;
+    float pixelPitchMm;
+    float scanAlphaScale;
+    float gridAlphaScale;
+    float contrastGlowAlpha;
+    const char* modelName;
+} SystemScreenSpec;
+
+static SystemScreenSpec GetSystemScreenSpec(uint8_t model) {
+    switch (model) {
+        case 0: /* CTR-001: 3DS Original (3.53", 132 PPI, 0.192mm pitch) */
+            return (SystemScreenSpec){ 132.0f, 0.192f, 1.00f, 1.00f, 14.0f, "3DS Original (CTR-001)" };
+        case 1: /* SPR-001: 3DS XL (4.88", 96 PPI, 0.265mm pitch) */
+            return (SystemScreenSpec){ 96.0f, 0.265f, 0.72f, 0.70f, 11.0f, "3DS XL (SPR-001)" };
+        case 2: /* KTR-001: New 3DS Original (3.88", 120 PPI, 0.211mm pitch) */
+            return (SystemScreenSpec){ 120.0f, 0.211f, 0.90f, 0.88f, 13.0f, "New 3DS (KTR-001)" };
+        case 3: /* FTR-001: 2DS Slate (3.53", 132 PPI, 2D TN) */
+            return (SystemScreenSpec){ 132.0f, 0.192f, 0.95f, 0.95f, 14.0f, "2DS Slate (FTR-001)" };
+        case 4: /* RED-001: New 3DS XL (4.88", 96 PPI, 0.265mm pitch, IPS/TN) */
+            return (SystemScreenSpec){ 96.0f, 0.265f, 0.70f, 0.68f, 11.0f, "New 3DS XL (RED-001)" };
+        case 5: /* JAN-001: New 2DS XL (4.88", 96 PPI, 0.265mm pitch, 2D TN Plastic) */
+            return (SystemScreenSpec){ 96.0f, 0.265f, 0.68f, 0.65f, 16.0f, "New 2DS XL (JAN-001)" };
+        default:
+            return (SystemScreenSpec){ 120.0f, 0.211f, 0.85f, 0.80f, 12.0f, "3DS Family" };
+    }
+}
+
 static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMode) {
     if (filterMode <= 0) return;
 
     uint8_t model = Platform3DS_GetSystemModel();
-    /* Models 1 (3DS XL), 4 (New 3DS XL), 5 (New 2DS XL) are XL screens */
-    bool isXL = (model == 1 || model == 4 || model == 5);
-    bool is2DSXL = (model == 5);
+    SystemScreenSpec spec = GetSystemScreenSpec(model);
 
-    /* 1: ARCADE SUPER, 2: AGB-001, 3: AGS-101, 4: GBA GRID, 5: SCANLINES 25%, 6: SCANLINES 50% */
-    uint8_t scanAlpha;
+    /* Base opacity calibrated for 132 PPI standard screen */
+    float baseScanAlpha;
     if (filterMode == 1) {
-        scanAlpha = isXL ? 35 : 45; /* ARCADE SUPER */
+        baseScanAlpha = 46.0f; /* ARCADE SUPER */
     } else if (filterMode == 2) {
-        scanAlpha = isXL ? 40 : 50; /* AGB-001 */
+        baseScanAlpha = 52.0f; /* AGB-001 */
     } else if (filterMode == 3) {
-        scanAlpha = isXL ? 35 : 45; /* AGS-101 IPS */
+        baseScanAlpha = 46.0f; /* AGS-101 IPS */
     } else if (filterMode == 4) {
-        scanAlpha = isXL ? 45 : 55; /* GBA LCD GRID */
+        baseScanAlpha = 54.0f; /* GBA LCD GRID */
     } else if (filterMode == 5) {
-        scanAlpha = isXL ? 45 : 60; /* SCANLINES 25% */
+        baseScanAlpha = 60.0f; /* SCANLINES 25% */
     } else if (filterMode == 6) {
-        scanAlpha = isXL ? 90 : 110; /* SCANLINES 50% */
+        baseScanAlpha = 115.0f; /* SCANLINES 50% */
     } else {
-        scanAlpha = 45;
+        baseScanAlpha = 46.0f;
     }
 
+    uint8_t scanAlpha = (uint8_t)(baseScanAlpha * spec.scanAlphaScale + 0.5f);
     u32 scanlineColor = C2D_Color32(0, 0, 0, scanAlpha);
 
-    /* ARCADE SUPER profile: Rich Arcade Glass contrast & subtle CRT phosphor glow */
+    /* ARCADE SUPER profile: Rich Arcade Glass contrast & CRT phosphor glow */
     if (filterMode == 1) {
-        u32 arcadeGlow = C2D_Color32(255, 230, 190, is2DSXL ? 10 : 14);
+        u32 arcadeGlow = C2D_Color32(255, 232, 195, (uint8_t)spec.contrastGlowAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, arcadeGlow);
     }
 
-    /* AGB-001 profile: Add authentic warm GBA screen tint */
+    /* AGB-001 profile: Authentic warm GBA reflective screen tint */
     if (filterMode == 2) {
-        u32 agbWarmTint = C2D_Color32(130, 95, 30, is2DSXL ? 18 : 24);
+        uint8_t agbAlpha = (uint8_t)(22.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
+        u32 agbWarmTint = C2D_Color32(130, 95, 30, agbAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agbWarmTint);
     }
 
-    /* AGS-101 IPS profile: Add high-contrast backlight vibrance tint */
+    /* AGS-101 IPS profile: High-contrast backlight vibrance tint */
     if (filterMode == 3) {
-        u32 agsCoolTint = C2D_Color32(10, 25, 45, is2DSXL ? 15 : 20);
+        uint8_t agsAlpha = (uint8_t)(18.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
+        u32 agsCoolTint = C2D_Color32(10, 25, 45, agsAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agsCoolTint);
     }
 
+    /* Horizontal Scanline Spacing Math based on scale height */
     float stepY = (h == 160.0f) ? 2.0f : (h / 120.0f);
     if (stepY < 1.0f) stepY = 1.0f;
 
@@ -285,9 +315,10 @@ static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMo
         C2D_DrawRectSolid(x, lineY, 0.5f, w, 1.0f, scanlineColor);
     }
 
-    /* Subpixel vertical grid mask for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
+    /* Subpixel vertical grid aperture mask for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
     if (filterMode == 1 || filterMode == 2 || filterMode == 3 || filterMode == 4) {
-        uint8_t vertAlpha = (filterMode == 1) ? (isXL ? 22 : 28) : (isXL ? (is2DSXL ? 35 : 30) : 40);
+        float baseVertAlpha = (filterMode == 1) ? 28.0f : 38.0f;
+        uint8_t vertAlpha = (uint8_t)(baseVertAlpha * spec.gridAlphaScale + 0.5f);
         u32 vertGridColor = C2D_Color32(0, 0, 0, vertAlpha);
         float stepX = (w <= 266.0f) ? 2.0f : (w / 200.0f);
         if (stepX < 1.5f) stepX = 2.0f;
