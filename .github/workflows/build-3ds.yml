@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -53,3 +55,11 @@ jobs:
           path: |
             build-3ds/game/tmc-3ds-v*.3dsx
             build-3ds/game/tmc-3ds-v*.cia
+
+      - name: Publish Release Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            build-3ds/game/tmc-3ds-v*.cia
+            build-3ds/game/tmc-3ds-v*.3dsx
