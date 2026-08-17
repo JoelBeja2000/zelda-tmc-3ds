@@ -28,7 +28,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends cmake make g++ pkg-config zip wget unzip git
           mkdir -p /tmp/tools
-          wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip -O /tmp/tools/makerom.zip
+          wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip -O /tmp/tools/makerom.zip
           unzip -o -q /tmp/tools/makerom.zip -d /tmp/tools/
           cp /tmp/tools/makerom /usr/local/bin/makerom
           chmod +x /usr/local/bin/makerom
