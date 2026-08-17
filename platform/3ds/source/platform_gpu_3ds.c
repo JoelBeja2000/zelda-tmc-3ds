@@ -266,66 +266,82 @@ static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMo
     uint8_t model = Platform3DS_GetSystemModel();
     SystemScreenSpec spec = GetSystemScreenSpec(model);
 
-    /* Base opacity calibrated for 132 PPI standard screen */
+    /* Base opacity calibrated per filter for 132 PPI standard screen */
     float baseScanAlpha;
     if (filterMode == 1) {
-        baseScanAlpha = 46.0f; /* ARCADE SUPER */
+        baseScanAlpha = 65.0f; /* ARCADE SUPER: Deep CRT Scanlines */
     } else if (filterMode == 2) {
-        baseScanAlpha = 52.0f; /* AGB-001 */
+        baseScanAlpha = 55.0f; /* AGB-001 */
     } else if (filterMode == 3) {
-        baseScanAlpha = 46.0f; /* AGS-101 IPS */
+        baseScanAlpha = 50.0f; /* AGS-101 IPS */
     } else if (filterMode == 4) {
-        baseScanAlpha = 54.0f; /* GBA LCD GRID */
+        baseScanAlpha = 58.0f; /* GBA LCD GRID */
     } else if (filterMode == 5) {
-        baseScanAlpha = 60.0f; /* SCANLINES 25% */
+        baseScanAlpha = 55.0f; /* SCANLINES 25% */
     } else if (filterMode == 6) {
-        baseScanAlpha = 115.0f; /* SCANLINES 50% */
+        baseScanAlpha = 110.0f; /* SCANLINES 50% */
     } else {
-        baseScanAlpha = 46.0f;
+        baseScanAlpha = 55.0f;
     }
 
     uint8_t scanAlpha = (uint8_t)(baseScanAlpha * spec.scanAlphaScale + 0.5f);
     u32 scanlineColor = C2D_Color32(0, 0, 0, scanAlpha);
+    int rectCount = 0;
 
     /* ARCADE SUPER profile: Rich Arcade Glass contrast & CRT phosphor glow */
     if (filterMode == 1) {
-        u32 arcadeGlow = C2D_Color32(255, 232, 195, (uint8_t)spec.contrastGlowAlpha);
+        u32 arcadeGlow = C2D_Color32(245, 230, 195, (uint8_t)spec.contrastGlowAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, arcadeGlow);
+        rectCount++;
     }
 
     /* AGB-001 profile: Authentic warm GBA reflective screen tint */
     if (filterMode == 2) {
-        uint8_t agbAlpha = (uint8_t)(22.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
+        uint8_t agbAlpha = (uint8_t)(24.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
         u32 agbWarmTint = C2D_Color32(130, 95, 30, agbAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agbWarmTint);
+        rectCount++;
     }
 
     /* AGS-101 IPS profile: High-contrast backlight vibrance tint */
     if (filterMode == 3) {
-        uint8_t agsAlpha = (uint8_t)(18.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
+        uint8_t agsAlpha = (uint8_t)(20.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
         u32 agsCoolTint = C2D_Color32(10, 25, 45, agsAlpha);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agsCoolTint);
+        rectCount++;
     }
 
-    /* Horizontal Scanline Spacing Math based on scale height */
+    /* Horizontal Scanline Spacing: 2px step for crisp CRT scanlines */
     float stepY = (h == 160.0f) ? 2.0f : (h / 120.0f);
     if (stepY < 1.0f) stepY = 1.0f;
 
     for (float lineY = y + 1.0f; lineY < y + h; lineY += stepY) {
         C2D_DrawRectSolid(x, lineY, 0.5f, w, 1.0f, scanlineColor);
+        if (++rectCount >= 50) {
+            C2D_Flush();
+            rectCount = 0;
+        }
     }
 
-    /* Subpixel vertical grid aperture mask for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
+    /* Subpixel vertical aperture grille for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
     if (filterMode == 1 || filterMode == 2 || filterMode == 3 || filterMode == 4) {
-        float baseVertAlpha = (filterMode == 1) ? 28.0f : 38.0f;
+        float baseVertAlpha = (filterMode == 1) ? 35.0f : 40.0f;
         uint8_t vertAlpha = (uint8_t)(baseVertAlpha * spec.gridAlphaScale + 0.5f);
         u32 vertGridColor = C2D_Color32(0, 0, 0, vertAlpha);
-        float stepX = (w <= 266.0f) ? 2.0f : (w / 200.0f);
-        if (stepX < 1.5f) stepX = 2.0f;
+        /* Step X = 3.0f for CRT Aperture Grille subpixel triad */
+        float stepX = (filterMode == 1) ? 3.0f : 4.0f;
 
         for (float lineX = x + 1.0f; lineX < x + w; lineX += stepX) {
             C2D_DrawRectSolid(lineX, y, 0.5f, 1.0f, h, vertGridColor);
+            if (++rectCount >= 50) {
+                C2D_Flush();
+                rectCount = 0;
+            }
         }
+    }
+
+    if (rectCount > 0) {
+        C2D_Flush();
     }
 }
 
