@@ -68,7 +68,7 @@ static const char* DisplayStyleConfigName(Port3DSDisplayStyle style) {
 }
 
 static const char* ScanlineFilterConfigName(Port3DSScanlineFilter filter) {
-    static const char* const names[PORT_3DS_SCANLINE_COUNT] = { "off", "light", "medium", "gba-grid", "agb-001", "ags-101" };
+    static const char* const names[PORT_3DS_SCANLINE_COUNT] = { "off", "arcade-super", "agb-001", "ags-101", "gba-grid", "light", "medium" };
     return filter >= 0 && filter < PORT_3DS_SCANLINE_COUNT ? names[filter] : names[PORT_3DS_SCANLINE_OFF];
 }
 
@@ -460,7 +460,7 @@ void Port_Config_Cycle3DSDisplayStyle(void) {
 int Port_Config_Get3DSScanlineFilter(void) { return (int)sScanlineFilter; }
 const char* Port_Config_Get3DSScanlineFilterName(void) {
     static const char* const names[PORT_3DS_SCANLINE_COUNT] = {
-        "OFF", "SCANLINES 25%", "SCANLINES 50%", "GBA LCD GRID", "GBA AGB-001", "GBA AGS-101 IPS"
+        "OFF", "ARCADE SUPER", "GBA AGB-001", "GBA AGS-101 IPS", "GBA LCD GRID", "SCANLINES 25%", "SCANLINES 50%"
     };
     return names[sScanlineFilter];
 }

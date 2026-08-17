@@ -219,6 +219,19 @@ uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index) {
     return index < 2 ? sBottomUploads[index] : NULL;
 }
 
+static void ResetStandardTextureEnv(void) {
+    C3D_TexEnv* env = C3D_GetTexEnv(0);
+    C3D_TexEnvInit(env);
+    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+
+    env = C3D_GetTexEnv(1);
+    C3D_TexEnvInit(env);
+
+    env = C3D_GetTexEnv(2);
+    C3D_TexEnvInit(env);
+}
+
 static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMode) {
     if (filterMode <= 0) return;
 
@@ -227,30 +240,40 @@ static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMo
     bool isXL = (model == 1 || model == 4 || model == 5);
     bool is2DSXL = (model == 5);
 
-    /* Calibrate alpha opacity for XL vs standard screens to prevent moire */
+    /* 1: ARCADE SUPER, 2: AGB-001, 3: AGS-101, 4: GBA GRID, 5: SCANLINES 25%, 6: SCANLINES 50% */
     uint8_t scanAlpha;
     if (filterMode == 1) {
-        scanAlpha = isXL ? 45 : 60; /* SCANLINES 25% */
+        scanAlpha = isXL ? 35 : 45; /* ARCADE SUPER */
     } else if (filterMode == 2) {
-        scanAlpha = isXL ? 95 : 120; /* SCANLINES 50% */
-    } else if (filterMode == 4) {
         scanAlpha = isXL ? 40 : 50; /* AGB-001 */
-    } else if (filterMode == 5) {
+    } else if (filterMode == 3) {
         scanAlpha = isXL ? 35 : 45; /* AGS-101 IPS */
-    } else {
+    } else if (filterMode == 4) {
         scanAlpha = isXL ? 45 : 55; /* GBA LCD GRID */
+    } else if (filterMode == 5) {
+        scanAlpha = isXL ? 45 : 60; /* SCANLINES 25% */
+    } else if (filterMode == 6) {
+        scanAlpha = isXL ? 90 : 110; /* SCANLINES 50% */
+    } else {
+        scanAlpha = 45;
     }
 
     u32 scanlineColor = C2D_Color32(0, 0, 0, scanAlpha);
 
+    /* ARCADE SUPER profile: Rich Arcade Glass contrast & subtle CRT phosphor glow */
+    if (filterMode == 1) {
+        u32 arcadeGlow = C2D_Color32(255, 230, 190, is2DSXL ? 10 : 14);
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, arcadeGlow);
+    }
+
     /* AGB-001 profile: Add authentic warm GBA screen tint */
-    if (filterMode == 4) {
+    if (filterMode == 2) {
         u32 agbWarmTint = C2D_Color32(130, 95, 30, is2DSXL ? 18 : 24);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agbWarmTint);
     }
 
     /* AGS-101 IPS profile: Add high-contrast backlight vibrance tint */
-    if (filterMode == 5) {
+    if (filterMode == 3) {
         u32 agsCoolTint = C2D_Color32(10, 25, 45, is2DSXL ? 15 : 20);
         C2D_DrawRectSolid(x, y, 0.45f, w, h, agsCoolTint);
     }
@@ -262,9 +285,9 @@ static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMo
         C2D_DrawRectSolid(x, lineY, 0.5f, w, 1.0f, scanlineColor);
     }
 
-    /* Subpixel vertical grid mask for GBA LCD GRID, AGB-001, and AGS-101 IPS */
-    if (filterMode >= 3) {
-        uint8_t vertAlpha = isXL ? (is2DSXL ? 35 : 30) : 40;
+    /* Subpixel vertical grid mask for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
+    if (filterMode == 1 || filterMode == 2 || filterMode == 3 || filterMode == 4) {
+        uint8_t vertAlpha = (filterMode == 1) ? (isXL ? 22 : 28) : (isXL ? (is2DSXL ? 35 : 30) : 40);
         u32 vertGridColor = C2D_Color32(0, 0, 0, vertAlpha);
         float stepX = (w <= 266.0f) ? 2.0f : (w / 200.0f);
         if (stepX < 1.5f) stepX = 2.0f;
@@ -319,13 +342,17 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
+    ConfigureAbgrTextureEnv();
+    C2D_Flush();
+
+    ResetStandardTextureEnv();
 
     int scanlines = Port_Config_Get3DSScanlineFilter();
     if (scanlines > 0) {
         DrawScanlineOverlay(params.pos.x, params.pos.y, params.pos.w, params.pos.h, scanlines);
+        C2D_Flush();
     }
 
-    ConfigureAbgrTextureEnv();
     if (Port_Config_GetShowFps()) {
         char label[20];
         double fps = Port_PPU_3DS_CurrentFps();
@@ -334,6 +361,7 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
         snprintf(label, sizeof(label), "FPS %u", rounded);
         C2D_DrawRectSolid(5.0f, 216.0f, 0.7f, 82.0f, 20.0f, C2D_Color32(0, 0, 0, 210));
         DrawStatusText(10.0f, 219.0f, 2.0f, label);
+        C2D_Flush();
     }
 }
 
@@ -371,6 +399,8 @@ bool PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
         C2D_SceneBegin(sBottomTarget);
         C2D_DrawImage(image, &params, NULL);
         ConfigureAbgrTextureEnv();
+        C2D_Flush();
+        ResetStandardTextureEnv();
         sBottomTargetValid = true;
         ++sStats.bottomTargetDraws;
     } else {
