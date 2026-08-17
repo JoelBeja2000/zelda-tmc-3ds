@@ -321,20 +321,52 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, sourceHeight),
                             (u32*)sTopTexture.data, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
                             TextureTransfer());
+    /* ----------------------------------------------------------------
+     * TEXEL-CENTER UV ALIGNMENT
+     * ----------------------------------------------------------------
+     * The game renders 240x160 pixels into a 512x256 GPU texture.
+     * Without correction, the subtexture UVs span from texel EDGE to
+     * texel EDGE (0.0 → width/512). This means the GPU samples at
+     * texel boundaries instead of texel centers, which causes:
+     *   - GPU_NEAREST: off-by-one texel sampling at some columns/rows,
+     *     creating "invented pixels" that don't exist in the source.
+     *   - GPU_LINEAR:  blending with the black padding outside the
+     *     game image, darkening the edges.
+     *
+     * Fix: inset UVs by half a texel so sampling maps exactly to the
+     * center of each source pixel. This ensures every screen pixel
+     * samples the correct game pixel (or correct blend of neighbors). */
+    const float halfU = 0.5f / (float)TOP_TEXTURE_WIDTH;   /* 0.5/512 */
+    const float halfV = 0.5f / (float)TOP_TEXTURE_HEIGHT;  /* 0.5/256 */
     sTopSubtexture = (Tex3DS_SubTexture){
-        .width = (u16)width, .height = 160, .left = 0.0f, .top = 1.0f,
-        .right = (float)width / TOP_TEXTURE_WIDTH, .bottom = 1.0f - 160.0f / TOP_TEXTURE_HEIGHT,
+        .width  = (u16)width,
+        .height = 160,
+        .left   = halfU,
+        .top    = 1.0f - halfV,
+        .right  = ((float)width - 0.5f) / (float)TOP_TEXTURE_WIDTH,
+        .bottom = 1.0f - (160.0f - 0.5f) / (float)TOP_TEXTURE_HEIGHT,
     };
     const C2D_Image image = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
 
-    /* ALWAYS use GPU_NEAREST for pixel-perfect scaling. GBA pixel art has
-     * hard edges that must stay sharp at any scale factor. Bilinear
-     * filtering (GPU_LINEAR) smears subpixel boundaries and makes the
-     * image look blurry. The only exception is the explicit BLUR style. */
+    /* ----------------------------------------------------------------
+     * TEXTURE FILTER SELECTION
+     * ----------------------------------------------------------------
+     * GBA (240x160) → 3DS top (400x240) requires a 1.5x scale factor.
+     * 1.5x is NOT an integer, so GPU_NEAREST creates ugly artifacts:
+     * some source rows/columns map to 1 output pixel, others to 2,
+     * causing visible "shimmer" and uneven sprite proportions.
+     *
+     * GPU_LINEAR (bilinear interpolation) handles non-integer scales
+     * cleanly by blending neighboring texels proportionally. This is
+     * the standard approach used by all major retro emulators (mGBA,
+     * RetroArch, VBA-M) for non-integer display scaling.
+     *
+     * PIXEL_PERFECT is the only mode that uses GPU_NEAREST, because
+     * it draws at 1:1 (240x160 centered) with no scaling at all. */
     const int style = Port_Config_Get3DSDisplayStyle();
-    C3D_TexSetFilter(&sTopTexture,
-                     style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST,
-                     style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST);
+    GPU_TEXTURE_FILTER_PARAM filter =
+        (style == TOP_DISPLAY_PIXEL_PERFECT) ? GPU_NEAREST : GPU_LINEAR;
+    C3D_TexSetFilter(&sTopTexture, filter, filter);
 
     /* Compute draw dimensions.
      * For PIXEL_PERFECT: native 1:1 (240x160 centered, no scale).
