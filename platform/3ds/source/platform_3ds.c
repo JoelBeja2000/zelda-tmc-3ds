@@ -20,6 +20,7 @@ static bool sQuickDumpRequested;
 static bool sQuickDumpComboWasHeld;
 static bool sRunning;
 static bool sIsNew3DS;
+static u8 sSystemModel;
 static unsigned sTurboMultiplier = 5;
 static bool sCore1Available;
 static unsigned sCore1TimeLimit;
@@ -124,6 +125,7 @@ int Platform3DS_Init(void) {
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
     cfguInit();
+    CFGU_GetSystemModel(&sSystemModel);
     romfsInit();
     consoleInit(GFX_BOTTOM, NULL);
 
@@ -174,6 +176,7 @@ void Platform3DS_Shutdown(void) {
 
 bool Platform3DS_IsRunning(void) { return sRunning; }
 bool Platform3DS_IsNew3DS(void) { return sIsNew3DS; }
+uint8_t Platform3DS_GetSystemModel(void) { return sSystemModel; }
 bool Platform3DS_CanUseCore1(void) { return sCore1Available; }
 unsigned Platform3DS_Core1TimeLimit(void) { return sCore1TimeLimit; }
 bool Platform3DS_TurboHeld(void) { return sIsNew3DS && sCStickHeld; }

@@ -187,6 +187,7 @@ enum {
 #ifdef TMC_3DS
     SS_SET_ASPECT_RATIO,
     SS_SET_DISPLAY_STYLE,
+    SS_SET_SCANLINES,
 #endif
     SS_SET_COUNT
 };
@@ -1748,7 +1749,7 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
     "COLOR CORRECTION", "SHOW FPS",           "HOLD TO ADVANCE TEXT",
     "RANDOMIZER",       "PANEL BACKDROP",     "SWAP SCREENS",
 #ifdef TMC_3DS
-    "ASPECT RATIO",     "DISPLAY STYLE",
+    "ASPECT RATIO",     "DISPLAY STYLE",     "SCANLINES / GBA",
 #endif
 };
 
@@ -1776,6 +1777,7 @@ static const char* SettingValueMinWord(int setting) {
 #ifdef TMC_3DS
         case SS_SET_ASPECT_RATIO: return "ORIGINAL";
         case SS_SET_DISPLAY_STYLE: return "PIXEL PERFECT";
+        case SS_SET_SCANLINES: return "SCANLINES 50%";
 #endif
         default: return "OFF";
     }
@@ -1797,6 +1799,7 @@ static int SettingsPageRows(int page, uint8_t* out) {
 #ifdef TMC_3DS
         out[n++] = SS_SET_ASPECT_RATIO;
         out[n++] = SS_SET_DISPLAY_STYLE;
+        out[n++] = SS_SET_SCANLINES;
         out[n++] = SS_SET_TOP_HUD;
         out[n++] = SS_SET_COLOR_CORRECTION;
         out[n++] = SS_SET_BACKDROP;
@@ -2023,6 +2026,9 @@ static int GetSettingState(int row, char* out, int outCap) {
         case SS_SET_DISPLAY_STYLE:
             snprintf(out, (size_t)outCap, "%s", Port_Config_Get3DSDisplayStyleName());
             return Port_Config_Get3DSDisplayStyle() != PORT_3DS_DISPLAY_SCALED;
+        case SS_SET_SCANLINES:
+            snprintf(out, (size_t)outCap, "%s", Port_Config_Get3DSScanlineFilterName());
+            return Port_Config_Get3DSScanlineFilter() != PORT_3DS_SCANLINE_OFF;
 #endif
     }
     if (row != SS_SET_TOP_HUD) {
@@ -2769,6 +2775,9 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                     break;
                 case SS_SET_DISPLAY_STYLE:
                     Port_Config_Cycle3DSDisplayStyle();
+                    break;
+                case SS_SET_SCANLINES:
+                    Port_Config_Cycle3DSScanlineFilter();
                     break;
 #endif
                 case SS_SET_FOLLOW:

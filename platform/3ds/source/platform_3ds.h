@@ -72,6 +72,7 @@ int Platform3DS_Init(void);
 void Platform3DS_Shutdown(void);
 bool Platform3DS_IsRunning(void);
 bool Platform3DS_IsNew3DS(void);
+uint8_t Platform3DS_GetSystemModel(void);
 bool Platform3DS_CanUseCore1(void);
 unsigned Platform3DS_Core1TimeLimit(void);
 void Platform3DS_ShowSplash(void);

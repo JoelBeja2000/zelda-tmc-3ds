@@ -224,12 +224,25 @@ typedef enum {
     PORT_3DS_DISPLAY_COUNT,
 } Port3DSDisplayStyle;
 
+typedef enum {
+    PORT_3DS_SCANLINE_OFF = 0,
+    PORT_3DS_SCANLINE_LIGHT,
+    PORT_3DS_SCANLINE_MEDIUM,
+    PORT_3DS_SCANLINE_GBA_GRID,
+    PORT_3DS_SCANLINE_AGB_001,
+    PORT_3DS_SCANLINE_AGS_101,
+    PORT_3DS_SCANLINE_COUNT,
+} Port3DSScanlineFilter;
+
 int Port_Config_Get3DSAspectRatio(void);
 const char* Port_Config_Get3DSAspectRatioName(void);
 void Port_Config_Cycle3DSAspectRatio(void);
 int Port_Config_Get3DSDisplayStyle(void);
 const char* Port_Config_Get3DSDisplayStyleName(void);
 void Port_Config_Cycle3DSDisplayStyle(void);
+int Port_Config_Get3DSScanlineFilter(void);
+const char* Port_Config_Get3DSScanlineFilterName(void);
+void Port_Config_Cycle3DSScanlineFilter(void);
 
 /* New 3DS C-stick turbo multiplier. The device supports 2x through 5x and
  * applies changes immediately to the frame-boundary scheduler. */

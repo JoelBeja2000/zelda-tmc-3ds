@@ -33,6 +33,8 @@ extern u32 __ctru_linear_heap_size;
 extern bool Port_Config_GetShowFps(void);
 extern int Port_Config_Get3DSAspectRatio(void);
 extern int Port_Config_Get3DSDisplayStyle(void);
+extern int Port_Config_Get3DSScanlineFilter(void);
+extern uint8_t Platform3DS_GetSystemModel(void);
 extern double Port_PPU_3DS_CurrentFps(void);
 
 enum {
@@ -217,6 +219,62 @@ uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index) {
     return index < 2 ? sBottomUploads[index] : NULL;
 }
 
+static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMode) {
+    if (filterMode <= 0) return;
+
+    uint8_t model = Platform3DS_GetSystemModel();
+    /* Models 1 (3DS XL), 4 (New 3DS XL), 5 (New 2DS XL) are XL screens */
+    bool isXL = (model == 1 || model == 4 || model == 5);
+    bool is2DSXL = (model == 5);
+
+    /* Calibrate alpha opacity for XL vs standard screens to prevent moire */
+    uint8_t scanAlpha;
+    if (filterMode == 1) {
+        scanAlpha = isXL ? 45 : 60; /* SCANLINES 25% */
+    } else if (filterMode == 2) {
+        scanAlpha = isXL ? 95 : 120; /* SCANLINES 50% */
+    } else if (filterMode == 4) {
+        scanAlpha = isXL ? 40 : 50; /* AGB-001 */
+    } else if (filterMode == 5) {
+        scanAlpha = isXL ? 35 : 45; /* AGS-101 IPS */
+    } else {
+        scanAlpha = isXL ? 45 : 55; /* GBA LCD GRID */
+    }
+
+    u32 scanlineColor = C2D_Color32(0, 0, 0, scanAlpha);
+
+    /* AGB-001 profile: Add authentic warm GBA screen tint */
+    if (filterMode == 4) {
+        u32 agbWarmTint = C2D_Color32(130, 95, 30, is2DSXL ? 18 : 24);
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, agbWarmTint);
+    }
+
+    /* AGS-101 IPS profile: Add high-contrast backlight vibrance tint */
+    if (filterMode == 5) {
+        u32 agsCoolTint = C2D_Color32(10, 25, 45, is2DSXL ? 15 : 20);
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, agsCoolTint);
+    }
+
+    float stepY = (h == 160.0f) ? 2.0f : (h / 120.0f);
+    if (stepY < 1.0f) stepY = 1.0f;
+
+    for (float lineY = y + 1.0f; lineY < y + h; lineY += stepY) {
+        C2D_DrawRectSolid(x, lineY, 0.5f, w, 1.0f, scanlineColor);
+    }
+
+    /* Subpixel vertical grid mask for GBA LCD GRID, AGB-001, and AGS-101 IPS */
+    if (filterMode >= 3) {
+        uint8_t vertAlpha = isXL ? (is2DSXL ? 35 : 30) : 40;
+        u32 vertGridColor = C2D_Color32(0, 0, 0, vertAlpha);
+        float stepX = (w <= 266.0f) ? 2.0f : (w / 200.0f);
+        if (stepX < 1.5f) stepX = 2.0f;
+
+        for (float lineX = x + 1.0f; lineX < x + w; lineX += stepX) {
+            C2D_DrawRectSolid(lineX, y, 0.5f, 1.0f, h, vertGridColor);
+        }
+    }
+}
+
 static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     if (width < 240u) width = 240u;
     if (width > 266u) width = 266u;
@@ -261,6 +319,12 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
+
+    int scanlines = Port_Config_Get3DSScanlineFilter();
+    if (scanlines > 0) {
+        DrawScanlineOverlay(params.pos.x, params.pos.y, params.pos.w, params.pos.h, scanlines);
+    }
+
     ConfigureAbgrTextureEnv();
     if (Port_Config_GetShowFps()) {
         char label[20];

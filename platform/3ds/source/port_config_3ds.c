@@ -22,6 +22,7 @@ static _Atomic bool sAutosave;
 static bool sConsoleParity;
 static _Atomic Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_STRETCH;
 static _Atomic Port3DSDisplayStyle sDisplayStyle = PORT_3DS_DISPLAY_BLUR;
+static _Atomic Port3DSScanlineFilter sScanlineFilter = PORT_3DS_SCANLINE_OFF;
 /* The desktop file-select overlay is rendered on the gameplay screen and
  * has no useful 3DS interaction path. Keep the native second-screen UI
  * separate and leave this desktop-only overlay disabled. */
@@ -66,6 +67,11 @@ static const char* DisplayStyleConfigName(Port3DSDisplayStyle style) {
                                                         : names[PORT_3DS_DISPLAY_BLUR];
 }
 
+static const char* ScanlineFilterConfigName(Port3DSScanlineFilter filter) {
+    static const char* const names[PORT_3DS_SCANLINE_COUNT] = { "off", "light", "medium", "gba-grid", "agb-001", "ags-101" };
+    return filter >= 0 && filter < PORT_3DS_SCANLINE_COUNT ? names[filter] : names[PORT_3DS_SCANLINE_OFF];
+}
+
 static Port3DSAspectRatio ParseAspectRatio(const char* value) {
     for (int i = 0; i < PORT_3DS_ASPECT_COUNT; ++i) {
         if (strcmp(value, AspectRatioConfigName((Port3DSAspectRatio)i)) == 0) {
@@ -82,6 +88,15 @@ static Port3DSDisplayStyle ParseDisplayStyle(const char* value) {
         }
     }
     return PORT_3DS_DISPLAY_BLUR;
+}
+
+static Port3DSScanlineFilter ParseScanlineFilter(const char* value) {
+    for (int i = 0; i < PORT_3DS_SCANLINE_COUNT; ++i) {
+        if (strcmp(value, ScanlineFilterConfigName((Port3DSScanlineFilter)i)) == 0) {
+            return (Port3DSScanlineFilter)i;
+        }
+    }
+    return PORT_3DS_SCANLINE_OFF;
 }
 
 static void SaveConfig(void) {
@@ -106,6 +121,7 @@ static void SaveConfig(void) {
     fprintf(file, "widescreen=%u\n", sAspectRatio == PORT_3DS_ASPECT_WIDE ? 1u : 0u);
     fprintf(file, "screen_aspect=%s\n", AspectRatioConfigName(sAspectRatio));
     fprintf(file, "display_style=%s\n", DisplayStyleConfigName(sDisplayStyle));
+    fprintf(file, "scanline_filter=%s\n", ScanlineFilterConfigName(sScanlineFilter));
     fprintf(file, "master_volume=%.2f\n", (double)sVolume);
     fprintf(file, "panel_backdrop=%d\n", sBackdrop);
     fprintf(file, "turbo_multiplier=%u\n", sTurboMultiplier);
@@ -177,6 +193,8 @@ void Port_Config_Load(const char* path) {
                 hasScreenAspect = true;
             } else if (strcmp(key, "display_style") == 0) {
                 sDisplayStyle = ParseDisplayStyle(value);
+            } else if (strcmp(key, "scanline_filter") == 0) {
+                sScanlineFilter = ParseScanlineFilter(value);
             }
             else if (strcmp(key, "master_volume") == 0) sVolume = strtof(value, NULL);
             else if (strcmp(key, "panel_backdrop") == 0) sBackdrop = (int)strtol(value, NULL, 10);
@@ -436,5 +454,17 @@ const char* Port_Config_Get3DSDisplayStyleName(void) {
 }
 void Port_Config_Cycle3DSDisplayStyle(void) {
     sDisplayStyle = (Port3DSDisplayStyle)((sDisplayStyle + 1) % PORT_3DS_DISPLAY_COUNT);
+    SaveConfig();
+}
+
+int Port_Config_Get3DSScanlineFilter(void) { return (int)sScanlineFilter; }
+const char* Port_Config_Get3DSScanlineFilterName(void) {
+    static const char* const names[PORT_3DS_SCANLINE_COUNT] = {
+        "OFF", "SCANLINES 25%", "SCANLINES 50%", "GBA LCD GRID", "GBA AGB-001", "GBA AGS-101 IPS"
+    };
+    return names[sScanlineFilter];
+}
+void Port_Config_Cycle3DSScanlineFilter(void) {
+    sScanlineFilter = (Port3DSScanlineFilter)((sScanlineFilter + 1) % PORT_3DS_SCANLINE_COUNT);
     SaveConfig();
 }
