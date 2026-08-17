@@ -32,8 +32,8 @@ jobs:
           unzip -o -q /tmp/tools/makerom.zip -d /tmp/tools/
           cp /tmp/tools/makerom /usr/local/bin/makerom
           chmod +x /usr/local/bin/makerom
-          wget -q https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.3/bannertool-1.2.3-linux.tar.gz -O /tmp/tools/bannertool.tar.gz
-          tar -xzf /tmp/tools/bannertool.tar.gz -C /tmp/tools/
+          wget -q https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.2/bannertool-1.2.2-linux.zip -O /tmp/tools/bannertool.zip
+          unzip -o -q /tmp/tools/bannertool.zip -d /tmp/tools/
           find /tmp/tools -name "bannertool" -type f -exec cp {} /usr/local/bin/bannertool \;
           chmod +x /usr/local/bin/bannertool
 
