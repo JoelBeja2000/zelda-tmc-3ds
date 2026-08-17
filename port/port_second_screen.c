@@ -1777,7 +1777,7 @@ static const char* SettingValueMinWord(int setting) {
 #ifdef TMC_3DS
         case SS_SET_ASPECT_RATIO: return "ORIGINAL";
         case SS_SET_DISPLAY_STYLE: return "PIXEL PERFECT";
-        case SS_SET_SCANLINES: return "SCANLINES 50%";
+        case SS_SET_SCANLINES: return "GBA AGS-101 IPS";
 #endif
         default: return "OFF";
     }
