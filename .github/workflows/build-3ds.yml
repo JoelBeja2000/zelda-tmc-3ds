@@ -28,11 +28,8 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends cmake make pkg-config zip wget unzip
           mkdir -p /tmp/tools
-          wget -q https://github.com/3DS-Development/makerom/releases/download/v0.17/makerom-v0.17-ubuntu_x86_64.zip -O /tmp/tools/makerom.zip || true
-          if [ -f /tmp/tools/makerom.zip ]; then
-            unzip -o -q /tmp/tools/makerom.zip -d /usr/local/bin/
-            chmod +x /usr/local/bin/makerom || true
-          fi
+          wget -q https://github.com/3DS-Development/makerom/releases/download/v0.17/makerom-v0.17-ubuntu_x86_64 -O /usr/local/bin/makerom || true
+          chmod +x /usr/local/bin/makerom || true
           wget -q https://github.com/Steveice10/bannertool/releases/download/1.2.0/bannertool.zip -O /tmp/tools/bannertool.zip || true
           if [ -f /tmp/tools/bannertool.zip ]; then
             unzip -o -q /tmp/tools/bannertool.zip -d /tmp/tools/
