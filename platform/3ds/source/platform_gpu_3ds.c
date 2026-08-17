@@ -264,85 +264,51 @@ static void DrawScanlineOverlay(float x, float y, float w, float h, int filterMo
     if (filterMode <= 0) return;
 
     uint8_t model = Platform3DS_GetSystemModel();
-    SystemScreenSpec spec = GetSystemScreenSpec(model);
+    bool isXL = (model == 1 || model == 4 || model == 5);
 
-    /* Base opacity calibrated per filter for 132 PPI standard screen */
-    float baseScanAlpha;
-    if (filterMode == 1) {
-        baseScanAlpha = 65.0f; /* ARCADE SUPER: Deep CRT Scanlines */
-    } else if (filterMode == 2) {
-        baseScanAlpha = 55.0f; /* AGB-001 */
-    } else if (filterMode == 3) {
-        baseScanAlpha = 50.0f; /* AGS-101 IPS */
-    } else if (filterMode == 4) {
-        baseScanAlpha = 58.0f; /* GBA LCD GRID */
-    } else if (filterMode == 5) {
-        baseScanAlpha = 55.0f; /* SCANLINES 25% */
-    } else if (filterMode == 6) {
-        baseScanAlpha = 110.0f; /* SCANLINES 50% */
-    } else {
-        baseScanAlpha = 55.0f;
+    /* ----------------------------------------------------------------
+     * CRITICAL: This function must NEVER call C2D_Flush().
+     * Citro2D batches all C2D_DrawRectSolid calls into one GPU command
+     * list per scene. Flushing mid-scene corrupts the internal vertex
+     * buffer state, which prevents the bottom screen from rendering.
+     *
+     * We keep the total rectangle count under 40 to stay well within
+     * Citro2D's safe vertex budget (~128 quads / 512 vertices).
+     * ---------------------------------------------------------------- */
+
+    /* Color tint overlays (1 rect each) */
+    if (filterMode == 1) { /* ARCADE SUPER: warm phosphor glow */
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, C2D_Color32(245, 228, 190, isXL ? 12 : 16));
+    } else if (filterMode == 2) { /* AGB-001: warm reflective tint */
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, C2D_Color32(130, 95, 30, isXL ? 16 : 22));
+    } else if (filterMode == 3) { /* AGS-101: cool backlight tint */
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, C2D_Color32(10, 25, 45, isXL ? 12 : 18));
+    } else if (filterMode == 4) { /* GBA LCD GRID: neutral */
+        C2D_DrawRectSolid(x, y, 0.45f, w, h, C2D_Color32(0, 0, 0, isXL ? 8 : 12));
     }
 
-    uint8_t scanAlpha = (uint8_t)(baseScanAlpha * spec.scanAlphaScale + 0.5f);
-    u32 scanlineColor = C2D_Color32(0, 0, 0, scanAlpha);
-    int rectCount = 0;
+    /* Scanline darkness per filter */
+    uint8_t scanAlpha;
+    if (filterMode == 1)      scanAlpha = isXL ? 30 : 40; /* ARCADE SUPER */
+    else if (filterMode == 2) scanAlpha = isXL ? 35 : 45; /* AGB-001 */
+    else if (filterMode == 3) scanAlpha = isXL ? 28 : 38; /* AGS-101 */
+    else if (filterMode == 4) scanAlpha = isXL ? 38 : 48; /* GBA LCD GRID */
+    else if (filterMode == 5) scanAlpha = isXL ? 40 : 55; /* SCANLINES 25% */
+    else                      scanAlpha = isXL ? 85 : 105; /* SCANLINES 50% */
 
-    /* ARCADE SUPER profile: Rich Arcade Glass contrast & CRT phosphor glow */
-    if (filterMode == 1) {
-        u32 arcadeGlow = C2D_Color32(245, 230, 195, (uint8_t)spec.contrastGlowAlpha);
-        C2D_DrawRectSolid(x, y, 0.45f, w, h, arcadeGlow);
-        rectCount++;
+    u32 scanColor = C2D_Color32(0, 0, 0, scanAlpha);
+
+    /* Horizontal scanlines — draw every 6th pixel row for ~40 lines max.
+     * This produces the classic CRT darkened-gap look while staying far
+     * under the Citro2D vertex budget. The step is tuned so the lines
+     * align with the 1.5x integer scale of GBA→3DS (160→240). */
+    float stepY = h / 40.0f;
+    if (stepY < 3.0f) stepY = 3.0f;
+
+    for (float ly = y + stepY; ly < y + h; ly += stepY) {
+        C2D_DrawRectSolid(x, ly, 0.5f, w, 1.0f, scanColor);
     }
-
-    /* AGB-001 profile: Authentic warm GBA reflective screen tint */
-    if (filterMode == 2) {
-        uint8_t agbAlpha = (uint8_t)(24.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
-        u32 agbWarmTint = C2D_Color32(130, 95, 30, agbAlpha);
-        C2D_DrawRectSolid(x, y, 0.45f, w, h, agbWarmTint);
-        rectCount++;
-    }
-
-    /* AGS-101 IPS profile: High-contrast backlight vibrance tint */
-    if (filterMode == 3) {
-        uint8_t agsAlpha = (uint8_t)(20.0f * (spec.ppi < 110.0f ? 0.8f : 1.0f));
-        u32 agsCoolTint = C2D_Color32(10, 25, 45, agsAlpha);
-        C2D_DrawRectSolid(x, y, 0.45f, w, h, agsCoolTint);
-        rectCount++;
-    }
-
-    /* Horizontal Scanline Spacing: 2px step for crisp CRT scanlines */
-    float stepY = (h == 160.0f) ? 2.0f : (h / 120.0f);
-    if (stepY < 1.0f) stepY = 1.0f;
-
-    for (float lineY = y + 1.0f; lineY < y + h; lineY += stepY) {
-        C2D_DrawRectSolid(x, lineY, 0.5f, w, 1.0f, scanlineColor);
-        if (++rectCount >= 50) {
-            C2D_Flush();
-            rectCount = 0;
-        }
-    }
-
-    /* Subpixel vertical aperture grille for ARCADE SUPER, AGB-001, AGS-101 IPS, and GBA LCD GRID */
-    if (filterMode == 1 || filterMode == 2 || filterMode == 3 || filterMode == 4) {
-        float baseVertAlpha = (filterMode == 1) ? 35.0f : 40.0f;
-        uint8_t vertAlpha = (uint8_t)(baseVertAlpha * spec.gridAlphaScale + 0.5f);
-        u32 vertGridColor = C2D_Color32(0, 0, 0, vertAlpha);
-        /* Step X = 3.0f for CRT Aperture Grille subpixel triad */
-        float stepX = (filterMode == 1) ? 3.0f : 4.0f;
-
-        for (float lineX = x + 1.0f; lineX < x + w; lineX += stepX) {
-            C2D_DrawRectSolid(lineX, y, 0.5f, 1.0f, h, vertGridColor);
-            if (++rectCount >= 50) {
-                C2D_Flush();
-                rectCount = 0;
-            }
-        }
-    }
-
-    if (rectCount > 0) {
-        C2D_Flush();
-    }
+    /* That loop produces at most ~40 rects. Total with tint = ~41. Safe. */
 }
 
 static void DrawTopImage(const uint32_t* pixels, unsigned width) {
@@ -351,9 +317,6 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     sTopPresentWidth = width;
 
     GSPGPU_FlushDataCache(pixels, TOP_TEXTURE_WIDTH * 160u * sizeof(uint32_t));
-    /* Old 3DS only: the CPU renderer publishes 160 rows. Describe that exact
-     * source rectangle so the display engine does not read another 96 unused
-     * RGBA rows. New 3DS retains the established transfer dimensions. */
     const unsigned sourceHeight = sOld3DSProfile ? 160u : TOP_TEXTURE_HEIGHT;
     C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, sourceHeight),
                             (u32*)sTopTexture.data, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
@@ -363,12 +326,23 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
         .right = (float)width / TOP_TEXTURE_WIDTH, .bottom = 1.0f - 160.0f / TOP_TEXTURE_HEIGHT,
     };
     const C2D_Image image = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
+
+    /* ALWAYS use GPU_NEAREST for pixel-perfect scaling. GBA pixel art has
+     * hard edges that must stay sharp at any scale factor. Bilinear
+     * filtering (GPU_LINEAR) smears subpixel boundaries and makes the
+     * image look blurry. The only exception is the explicit BLUR style. */
     const int style = Port_Config_Get3DSDisplayStyle();
-    C3D_TexSetFilter(&sTopTexture, style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST,
+    C3D_TexSetFilter(&sTopTexture,
+                     style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST,
                      style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST);
 
-    float drawW;
-    float drawH;
+    /* Compute draw dimensions.
+     * For PIXEL_PERFECT: native 1:1 (240x160 centered, no scale).
+     * For SCALED/BLUR: fill height to 240 with correct aspect ratio.
+     *   - ORIGINAL → 360x240 (exact 1.5x integer scale, pixel-perfect).
+     *   - STRETCH  → 400x240 (fills the screen, slight horizontal stretch).
+     *   - WIDE     → 400x240 or 360x240 depending on source width. */
+    float drawW, drawH;
     if (style == TOP_DISPLAY_PIXEL_PERFECT) {
         drawW = (float)width;
         drawH = 160.0f;
@@ -386,18 +360,21 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
                  .w = drawW, .h = drawH },
         .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
     };
+
+    /* --- Render pass 1: game image with ABGR TEV --- */
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
     C2D_Flush();
 
+    /* --- Render pass 2: overlay (solid rects, standard TEV) --- */
     ResetStandardTextureEnv();
 
     int scanlines = Port_Config_Get3DSScanlineFilter();
     if (scanlines > 0) {
         DrawScanlineOverlay(params.pos.x, params.pos.y, params.pos.w, params.pos.h, scanlines);
-        C2D_Flush();
+        /* Single flush for the entire overlay batch — no mid-scene flushes */
     }
 
     if (Port_Config_GetShowFps()) {
@@ -408,8 +385,9 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
         snprintf(label, sizeof(label), "FPS %u", rounded);
         C2D_DrawRectSolid(5.0f, 216.0f, 0.7f, 82.0f, 20.0f, C2D_Color32(0, 0, 0, 210));
         DrawStatusText(10.0f, 219.0f, 2.0f, label);
-        C2D_Flush();
     }
+    /* All overlay rects (scanlines + FPS) are flushed together here */
+    C2D_Flush();
 }
 
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width) {
