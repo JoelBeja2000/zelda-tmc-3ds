@@ -351,21 +351,17 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     /* ----------------------------------------------------------------
      * TEXTURE FILTER SELECTION
      * ----------------------------------------------------------------
-     * GBA (240x160) → 3DS top (400x240) requires a 1.5x scale factor.
-     * 1.5x is NOT an integer, so GPU_NEAREST creates ugly artifacts:
-     * some source rows/columns map to 1 output pixel, others to 2,
-     * causing visible "shimmer" and uneven sprite proportions.
+     * Pixel art games like Minish Cap require crisp, razor-sharp pixel
+     * edges. Using GPU_LINEAR causes bilinear blur that softens the
+     * sprites and textures.
      *
-     * GPU_LINEAR (bilinear interpolation) handles non-integer scales
-     * cleanly by blending neighboring texels proportionally. This is
-     * the standard approach used by all major retro emulators (mGBA,
-     * RetroArch, VBA-M) for non-integer display scaling.
-     *
-     * PIXEL_PERFECT is the only mode that uses GPU_NEAREST, because
-     * it draws at 1:1 (240x160 centered) with no scaling at all. */
+     * - SCALED: Uses GPU_NEAREST for 100% sharp pixel-art scaling.
+     * - PIXEL_PERFECT: Uses GPU_NEAREST for 1:1 sharp native pixels.
+     * - BLUR: Uses GPU_LINEAR for users who explicitly want bilinear blur.
+     * ---------------------------------------------------------------- */
     const int style = Port_Config_Get3DSDisplayStyle();
     GPU_TEXTURE_FILTER_PARAM filter =
-        (style == TOP_DISPLAY_PIXEL_PERFECT) ? GPU_NEAREST : GPU_LINEAR;
+        (style == TOP_DISPLAY_BLUR) ? GPU_LINEAR : GPU_NEAREST;
     C3D_TexSetFilter(&sTopTexture, filter, filter);
 
     /* Compute draw dimensions.
