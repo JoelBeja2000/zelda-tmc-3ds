@@ -26,15 +26,16 @@ jobs:
       - name: Install host tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake make pkg-config zip wget unzip
+          apt-get install -y --no-install-recommends cmake make g++ pkg-config zip wget unzip git
           mkdir -p /tmp/tools
           wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip -O /tmp/tools/makerom.zip
           unzip -o -q /tmp/tools/makerom.zip -d /tmp/tools/
           cp /tmp/tools/makerom /usr/local/bin/makerom
           chmod +x /usr/local/bin/makerom
-          wget -q https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.2/bannertool-1.2.2-linux.zip -O /tmp/tools/bannertool.zip
-          unzip -o -q /tmp/tools/bannertool.zip -d /tmp/tools/
-          find /tmp/tools -name "bannertool" -type f -exec cp {} /usr/local/bin/bannertool \;
+          git clone --depth 1 https://github.com/carstene1ns/3ds-bannertool /tmp/bannertool-src
+          cmake -S /tmp/bannertool-src -B /tmp/bannertool-src/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/bannertool-src/build -j$(nproc)
+          cp /tmp/bannertool-src/build/bannertool /usr/local/bin/bannertool
           chmod +x /usr/local/bin/bannertool
 
       - name: Build universal CIA and 3DSX
